@@ -1,5 +1,4 @@
 """
-Version 1.0
 Various classifiers based on the perceptron model each one with is own training and prediction process.
 
 By Hugo LEMARCHANT
@@ -243,4 +242,4 @@ def use_NumpyNN(dataset, epsilon=1e-3, reg_lambda=0.1, nn_hdim=256, num_passes=1
 
 
 if __name__ == "__main__":
-    use_NumpyNN(IrisProcessing.load_iris(0.1))
+    use_NumpyNN(IrisProcessing.load_iris(0.1), epsilon=1e-4, nn_hdim=512, num_passes=2000)

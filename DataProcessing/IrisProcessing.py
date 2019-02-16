@@ -1,6 +1,5 @@
 """
-Version 2.0
-Code for extraction, standardization and analaysis of the Iris dataset.
+Code for extraction, standardization and analysis of the Iris dataset.
 
 By Hugo LEMARCHANT.
 """
@@ -20,12 +19,11 @@ def load_iris(test_size):
     All features will be scaled to reduce scale bias between each feature.
     :param test_size: float in range [0,1[, wiche determine the portion of the dataset
                     to hold for the validation phase.
-    :return
+    :return:
         X: the features which will be used as training data.
         X_test: the features used for validation phase.
         Y: the labels used for the training phase.
-        Y_test: the labels usedd for the validation phase.
-    :return:
+        Y_test: the labels used for the validation phase.
     """
     dataset = pd.read_csv('..\Datasets\iris.csv', delimiter=',')
     labels = dataset.values[:, -1:]
