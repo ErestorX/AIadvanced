@@ -17,7 +17,7 @@ def load_iris(test_size):
     Load_iris performs the loading of the Iris dataset present in the a folder named Dataset.
     It requires Iris dataset on .csv format.
     All features will be scaled to reduce scale bias between each feature.
-    :param test_size: float in range [0,1[, wiche determine the portion of the dataset
+    :param test_size: float in range [0,1[, which determine the portion of the dataset
                     to hold for the validation phase.
     :return:
         X: the features which will be used as training data.
@@ -41,7 +41,7 @@ def scale_dataset(*targets):
     """
     Scale_dataset scales each dataset with the sklearn function StandardScaler
     :param targets: a list of numpy arrays to scale.
-    :return scaledDtatsets : a list of numpy arrays, each one scaled individualy.
+    :return scaledDtatsets : a list of numpy arrays, each one scaled individually.
     """
     print("[INFO] Scaling {0} sets...".format(len(targets)))
     scaler = StandardScaler()
@@ -53,11 +53,11 @@ def scale_dataset(*targets):
 
 def analyse_dataset(dataset, verbose=True):
     """
-    Analyse_dataset prints several informations about the given dataset.
-    It prints the number of exemples and features, as well as the number of diffrent classes.
+    Analyse_dataset prints several information about the given dataset.
+    It prints the number of examples and features, as well as the number of different classes.
     It shows a plot with a curve of the explained PCA variance and the representation of the dataset
     along the two bests components.
-    :param dataset: a dataset wich is a tuple of numpy arrays (features, labels).
+    :param dataset: a dataset which is a tuple of numpy arrays (features, labels).
     :param verbose: boolean to print or not plots and [INFO] lines.
     :return: datashape : a list containing (nbExamples, nbFeatures, nbLabels).
     """
@@ -109,7 +109,7 @@ def plot_pca(data, labels):
 
 def get_ratio_pca(data):
     """
-    Get_ratio_pca plots the energy cumulated of each component ordered.
+    Get_ratio_pca plots the cumulative energy of each component ordered.
     :param data: numpy array of the features of the dataset to analyse.
     :return:
     """
