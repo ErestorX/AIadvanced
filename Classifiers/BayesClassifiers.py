@@ -102,6 +102,13 @@ def use_sklearnKNN():
 
 class sklearn_decisionTree():
     def __init__(self, dataset, max_depth=2):
+        """
+        Class that instantiate a KNN estimator. Its predictions are based on the evaluation of the most discriminant
+        feature remaining.
+        :param dataset: list of numpy arrays containing (training_features, test_features, training_labels, test_labels).
+        :param max_depth: integer determining the max depth to create a decision tree with. The unlimited depth will
+        always be tested.
+        """
         self.best_clf = DecisionTreeClassifier(max_depth=2)
         self.accuracies = []
         if max_depth >= len(dataset[0][0]):
@@ -118,6 +125,13 @@ class sklearn_decisionTree():
                 self.best_clf = clf
 
     def train(self, dataset, depth=2):
+        """
+        Training of a decision tree estimator.
+        :param dataset: list of numpy arrays containing (training_features, test_features, training_labels, test_labels).
+        :param depth: desired depth to train that tree with.
+        :return: clf: the trained classifier.
+                 accuracy: the accuracy of this classifier on the test set.
+        """
         X, X_test, Y, Y_test = dataset
         clf = DecisionTreeClassifier(max_depth=depth)
         clf = clf.fit(X, Y)
@@ -126,6 +140,10 @@ class sklearn_decisionTree():
         return clf, accuracy
 
     def print_stats(self):
+        """
+        Print some information about the training process.
+        :return:
+        """
         for i in range(0, len(self.accuracies)):
             plt.plot(i, self.accuracies[i], "o")
         plt.xlabel("Depth")
@@ -148,13 +166,25 @@ def use_sklearndecisionTree():
 
 class sklearn_naiveBayes():
     def __init__(self, dataset):
+        """
+        Class that instantiate two bayesian estimators. Its predictions are based on a statistic estimation
+        from the dataset.
+        :param dataset: list of numpy arrays containing (training_features, test_features, training_labels, test_labels).
+        """
         self.NB_clf = [None, None]
         self.accuracies = [None, None]
         self.NB_clf[0], self.accuracies[0] = self.gaussian_train(dataset)
         self.NB_clf[1], self.accuracies[1] = self.multinomial_train(dataset)
 
     def multinomial_train(self, dataset):
+        """
+        Training of a decision naive multinomial estimator.
+        :param dataset: list of numpy arrays containing (training_features, test_features, training_labels, test_labels).
+        :return: clf: the trained classifier.
+                 accuracy: the accuracy of this classifier on the test set.
+        """
         X, X_test, Y, Y_test = dataset
+        # Multinomial estimator uses discrete values so we must transform our continuous values.
         est = KBinsDiscretizer(n_bins=10, encode='ordinal')
         est.fit(X)
         Xt = est.transform(X)
@@ -169,6 +199,12 @@ class sklearn_naiveBayes():
         return clf, accuracy
 
     def gaussian_train(self, dataset):
+        """
+        Training of a decision naive gaussian estimator.
+        :param dataset: list of numpy arrays containing (training_features, test_features, training_labels, test_labels).
+        :return: clf: the trained classifier.
+                 accuracy: the accuracy of this classifier on the test set.
+        """
         X, X_test, Y, Y_test = dataset
         clf = GaussianNB()
         clf.fit(X, Y)
@@ -178,6 +214,10 @@ class sklearn_naiveBayes():
 
 
     def print_stats(self):
+        """
+        Print some information about the training process.
+        :return:
+        """
         print("[INFO] precisions for Gaussian and Multinomial naive bayesian classifiers:")
         print("[INFO] Gaussian accuracy : {}.".format(self.accuracies[0]))
         print("[INFO] Multinomial accuracy : {}.".format(self.accuracies[1]))

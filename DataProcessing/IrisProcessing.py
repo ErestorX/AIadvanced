@@ -66,8 +66,8 @@ def analyse_dataset(dataset, verbose=True):
     if verbose:
         print("[INFO] dataset with {0} entries of {1} features.".format(len(Y), len(X[0])))
         print("[INFO] {0} labels : {1}.".format(len(label_list), label_list))
-        plot_pca(X, Y)
         get_ratio_pca(X)
+        plot_pca(X, Y)
     return len(Y), len(X[0]), len(label_list)
 
 
