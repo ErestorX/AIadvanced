@@ -26,8 +26,9 @@ def load_FashionMNIST(flatten=False):
         Y_test = extract_labels(f)
 
     if flatten:
-        X = X.flatten().reshape(60000, 28 * 28)
-        X_test = X_test.flatten().reshape(10000, 28 * 28)
+        X = X.flatten().reshape(60000, 784)
+        X_test = X_test.flatten().reshape(10000, 784)
+        X, X_test = scale_dataset(X, X_test)
 
     return X, X_test, Y, Y_test
 
@@ -52,6 +53,8 @@ def load_MNIST(flatten=False):
     if flatten:
         X = X.flatten().reshape(60000, 784)
         X_test = X_test.flatten().reshape(10000, 784)
+        X, X_test = scale_dataset(X, X_test)
+
     return X, X_test, Y, Y_test
 
 
