@@ -25,21 +25,24 @@ def scale_dataset(*targets):
     return scaledDatasets
 
 
-def analyse_dataset(dataset, verbose=True):
+def analyse_dataset(dataset, one_hot=True):
     """
     Analyse_dataset prints several information about the given dataset.
     It prints the number of examples and features, as well as the number of different classes.
     It shows a plot with a curve of the explained PCA variance and the representation of the dataset
     along the two bests components.
     :param dataset: a dataset which is a tuple of numpy arrays (features, labels).
-    :param verbose: boolean to print or not plots and [INFO] lines.
+    :param one_hot: boolean to perform functions compatible with this label format.
     :return: datashape : a list containing (nbExamples, nbFeatures, nbLabels).
     """
     X, Y = dataset
-    label_list = np.unique(Y)
-    if verbose:
-        print("[INFO] dataset with {0} entries of {1} features.".format(len(Y), len(X[0])))
-        print("[INFO] {0} labels : {1}.".format(len(label_list), label_list))
+    if one_hot:
+        label_list = np.unique(Y, axis=0)
+    else:
+        label_list = np.unique(Y)
+    print("[INFO] dataset with {0} entries of {1} features.".format(len(Y), len(X[0])))
+    print("[INFO] {0} labels : {1}.".format(len(label_list), label_list))
+    if not one_hot:
         get_ratio_pca(X)
         plot_pca(X, Y)
     return len(Y), len(X[0]), len(label_list)
