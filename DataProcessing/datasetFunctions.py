@@ -41,7 +41,7 @@ def analyse_dataset(dataset, one_hot=True):
     else:
         label_list = np.unique(Y)
     print("[INFO] dataset with {0} entries of {1} features.".format(len(Y), len(X[0])))
-    print("[INFO] {0} labels : {1}.".format(len(label_list), label_list))
+    print("[INFO] {0} labels : {1} of type {2}.".format(len(label_list), label_list, type(label_list[0])))
     if not one_hot:
         get_ratio_pca(X)
         plot_pca(X, Y)

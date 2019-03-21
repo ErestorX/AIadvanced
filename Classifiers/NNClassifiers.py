@@ -3,12 +3,18 @@ Various classifiers based on the perceptron model each one with is own training 
 
 By Hugo LEMARCHANT
 """
-
 import DataProcessing.datasetFunctions as df
+import DataProcessing.mnistProcessing
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import scipy.special
 import numpy as np
+from tensorflow.python.framework import ops
+from tensorflow.examples.tutorials.mnist import input_data
+from tensorflow.python.keras import backend
+from tensorflow.python.keras import layers
+from tensorflow.python.keras import models
+from tensorflow.python.keras import regularizers
 
 
 class NumpyNN:
@@ -220,7 +226,7 @@ class NumpyNN:
         print('Confusion matrix :\n', self.stat.confusion)
 
 
-def use_NumpyNN(dataset, epsilon=1e-3, reg_lambda=0.1, nn_hdim=256, num_passes=2000):
+def use_NumpyNN(dataset, epsilon=1e-5, reg_lambda=0.1, nn_hdim=256, num_passes=2000):
     """
     Function used to instantiate, train and test a numpy neural network.
     :param dataset: list of numpy arrays in the shape (training_features, training_labels, test_features, test_labels).
@@ -250,90 +256,462 @@ def use_NumpyNN(dataset, epsilon=1e-3, reg_lambda=0.1, nn_hdim=256, num_passes=2
 
 
 class TfNN:
-    def __init__(self):
-        RANDOM_SEED = 42
-        tf.set_random_seed(RANDOM_SEED)
+    """
+    Code from "https://medium.com/tensorist/classifying-fashion-articles-using-tensorflow-fashion-mnist-f22e8a04728a"
+    :return:
+    """
+    def __init__(self, mnist):
+        # Network parameters
+        self.n_hidden_1 = 128  # Units in first hidden layer
+        self.n_hidden_2 = 128  # Units in second hidden layer
+        self.n_input = 784  # Fashion MNIST data input (img shape: 28*28)
+        self.n_classes = 10  # Fashion MNIST total classes (0–9 digits)
+        self.n_samples = mnist.train.num_examples  # Number of examples in training set
 
-    def init_weights(shape):
-        """ Weight initialization """
-        weights = tf.random_normal(shape, stddev=0.1)
-        return tf.Variable(weights)
-
-    def forwardprop(X, w_1, w_2):
+    def create_placeholders(self, n_x, n_y):
         """
-        Forward-propagation.
-        IMPORTANT: yhat is not softmax since TensorFlow's softmax_cross_entropy_with_logits() does that internally.
+        Creates the placeholders for the tensorflow session.
+
+        Arguments:
+        n_x -- scalar, size of an image vector (28*28 = 784)
+        n_y -- scalar, number of classes (10)
+
+        Returns:
+        X -- placeholder for the data input, of shape [n_x, None] and dtype "float"
+        Y -- placeholder for the input labels, of shape [n_y, None] and dtype "float"
         """
-        h = tf.nn.sigmoid(tf.matmul(X, w_1))  # The \sigma function
-        yhat = tf.matmul(h, w_2)  # The \varphi function
-        return yhat
 
-    def get_iris_data(self):
-        """ Read the iris data set and split them into training and test sets """
-        iris = datasets.load_iris()
-        data = iris["data"]
-        target = iris["target"]
+        X = tf.placeholder(tf.float32, [n_x, None], name="X")
+        Y = tf.placeholder(tf.float32, [n_y, None], name="Y")
 
-        # Prepend the column of 1s for bias
-        N, M = data.shape
-        all_X = np.ones((N, M + 1))
-        all_X[:, 1:] = data
+        return X, Y
 
-        # Convert into one-hot vectors
-        num_labels = len(np.unique(target))
-        all_Y = np.eye(num_labels)[target]  # One liner trick!
-        return train_test_split(all_X, all_Y, test_size=0.33, random_state=RANDOM_SEED)
+    def initialize_parameters(self):
+        """
+        Initializes parameters to build a neural network with tensorflow. The shapes are:
+                            W1 : [n_hidden_1, n_input]
+                            b1 : [n_hidden_1, 1]
+                            W2 : [n_hidden_2, n_hidden_1]
+                            b2 : [n_hidden_2, 1]
+                            W3 : [n_classes, n_hidden_2]
+                            b3 : [n_classes, 1]
 
-    def train(self):
-        train_X, test_X, train_y, test_y = get_iris_data()
+        Returns:
+        parameters -- a dictionary of tensors containing W1, b1, W2, b2, W3, b3
+        """
 
-        # Layer's sizes
-        x_size = train_X.shape[1]  # Number of input nodes: 4 features and 1 bias
-        h_size = 256  # Number of hidden nodes
-        y_size = train_y.shape[1]  # Number of outcomes (3 iris flowers)
+        # Set random seed for reproducibility
+        tf.set_random_seed(42)
 
-        # Symbols
-        X = tf.placeholder("float", shape=[None, x_size])
-        y = tf.placeholder("float", shape=[None, y_size])
+        # Initialize weights and biases for each layer
+        # First hidden layer
+        W1 = tf.get_variable("W1", [self.n_hidden_1, self.n_input], initializer=tf.contrib.layers.xavier_initializer(seed=42))
+        b1 = tf.get_variable("b1", [self.n_hidden_1, 1], initializer=tf.zeros_initializer())
 
-        # Weight initializations
-        w_1 = init_weights((x_size, h_size))
-        w_2 = init_weights((h_size, y_size))
+        # Second hidden layer
+        W2 = tf.get_variable("W2", [self.n_hidden_2, self.n_hidden_1], initializer=tf.contrib.layers.xavier_initializer(seed=42))
+        b2 = tf.get_variable("b2", [self.n_hidden_2, 1], initializer=tf.zeros_initializer())
+
+        # Output layer
+        W3 = tf.get_variable("W3", [self.n_classes, self.n_hidden_2], initializer=tf.contrib.layers.xavier_initializer(seed=42))
+        b3 = tf.get_variable("b3", [self.n_classes, 1], initializer=tf.zeros_initializer())
+
+        # Store initializations as a dictionary of parameters
+        parameters = {"W1": W1, "b1": b1, "W2": W2, "b2": b2, "W3": W3, "b3": b3}
+
+        return parameters
+
+    def forward_propagation(self, X, parameters):
+        """
+        Implements the forward propagation for the model:
+        LINEAR -> RELU -> LINEAR -> RELU -> LINEAR -> SOFTMAX
+
+        Arguments:
+        X -- input dataset placeholder, of shape (input size, number of examples)
+        parameters -- python dictionary containing your parameters "W1", "b1", "W2", "b2", "W3", "b3"
+                      the shapes are given in initialize_parameters
+        Returns:
+        Z3 -- the output of the last LINEAR unit
+        """
+
+        # Retrieve parameters from dictionary
+        W1, b1 = parameters['W1'], parameters['b1']
+        W2, b2 = parameters['W2'], parameters['b2']
+        W3, b3 = parameters['W3'], parameters['b3']
+
+        # Carry out forward propagation
+        Z1 = tf.add(tf.matmul(W1, X), b1)
+        A1 = tf.nn.relu(Z1)
+        Z2 = tf.add(tf.matmul(W2, A1), b2)
+        A2 = tf.nn.relu(Z2)
+        Z3 = tf.add(tf.matmul(W3, A2), b3)
+
+        return Z3
+
+    def compute_cost(self, Z3, Y):
+        """
+        Computes the cost
+
+        Arguments:
+        Z3 -- output of forward propagation (output of the last LINEAR unit), of shape (10, number_of_examples)
+        Y -- "true" labels vector placeholder, same shape as Z3
+
+        Returns:
+        cost - Tensor of the cost function
+        """
+
+        # Get logits (predictions) and labels
+        logits = tf.transpose(Z3)
+        labels = tf.transpose(Y)
+
+        # Compute cost
+        cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits_v2(logits=logits, labels=labels))
+
+        return cost
+
+    def model(self, train, test, learning_rate=0.0001, num_epochs=16, minibatch_size=32, print_cost=True,
+              graph_filename='costs'):
+        """
+        Implements a three-layer tensorflow neural network: LINEAR->RELU->LINEAR->RELU->LINEAR->SOFTMAX.
+
+        Arguments:
+        train -- training set
+        test -- test set
+        learning_rate -- learning rate of the optimization
+        num_epochs -- number of epochs of the optimization loop
+        minibatch_size -- size of a minibatch
+        print_cost -- True to print the cost every epoch
+
+        Returns:
+        parameters -- parameters learnt by the model. They can then be used to predict.
+        """
+
+        # Ensure that model can be rerun without overwriting tf variables
+        ops.reset_default_graph()
+        # For reproducibility
+        tf.set_random_seed(42)
+        seed = 42
+        # Get input and output shapes
+        (n_x, m) = train.images.T.shape
+        n_y = train.labels.T.shape[0]
+
+        costs = []
+
+        # Create placeholders of shape (n_x, n_y)
+        X, Y = self.create_placeholders(n_x, n_y)
+        # Initialize parameters
+        parameters = self.initialize_parameters()
 
         # Forward propagation
-        yhat = forwardprop(X, w_1, w_2)
-        predict = tf.argmax(yhat, axis=1)
+        Z3 = self.forward_propagation(X, parameters)
+        # Cost function
+        cost = self.compute_cost(Z3, Y)
+        # Backpropagation (using Adam optimizer)
+        optimizer = tf.train.AdamOptimizer(learning_rate).minimize(cost)
 
-        # Backward propagation
-        cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=yhat))
-        updates = tf.train.GradientDescentOptimizer(0.01).minimize(cost)
-
-        # Run SGD
-        sess = tf.Session()
+        # Initialize variables
         init = tf.global_variables_initializer()
-        sess.run(init)
 
-        for epoch in range(100):
-            # Train with each example
-            for i in range(len(train_X)):
-                sess.run(updates, feed_dict={X: train_X[i: i + 1], y: train_y[i: i + 1]})
+        # Start session to compute Tensorflow graph
+        with tf.Session() as sess:
 
-            train_accuracy = np.mean(np.argmax(train_y, axis=1) ==
-                                     sess.run(predict, feed_dict={X: train_X, y: train_y}))
-            test_accuracy = np.mean(np.argmax(test_y, axis=1) ==
-                                    sess.run(predict, feed_dict={X: test_X, y: test_y}))
+            # Run initialization
+            sess.run(init)
 
-            print("Epoch = %d, train accuracy = %.2f%%, test accuracy = %.2f%%"
-                  % (epoch + 1, 100. * train_accuracy, 100. * test_accuracy))
+            # Training loop
+            for epoch in range(num_epochs):
 
-        sess.close()
+                epoch_cost = 0.
+                num_minibatches = int(m / minibatch_size)
+                seed = seed + 1
+
+                for i in range(num_minibatches):
+                    # Get next batch of training data and labels
+                    minibatch_X, minibatch_Y = train.next_batch(minibatch_size)
+
+                    # Execute optimizer and cost function
+                    _, minibatch_cost = sess.run([optimizer, cost], feed_dict={X: minibatch_X.T, Y: minibatch_Y.T})
+
+                    # Update epoch cost
+                    epoch_cost += minibatch_cost / num_minibatches
+
+                # Print the cost every epoch
+                if print_cost:
+                    print("Cost after epoch {epoch_num}: {cost}".format(epoch_num=epoch, cost=epoch_cost))
+                    costs.append(epoch_cost)
+
+            # Plot costs
+            plt.figure(figsize=(16, 5))
+            plt.plot(np.squeeze(costs), color='#2A688B')
+            plt.xlim(0, num_epochs - 1)
+            plt.ylabel("cost")
+            plt.xlabel("iterations")
+            plt.title("learning rate = {rate}".format(rate=learning_rate))
+            plt.savefig(graph_filename, dpi=300)
+            plt.show()
+
+            # Save parameters
+            parameters = sess.run(parameters)
+            print("Parameters have been trained!")
+
+            # Calculate correct predictions
+            correct_prediction = tf.equal(tf.argmax(Z3), tf.argmax(Y))
+
+            # Calculate accuracy on test set
+            accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float"))
+
+            print("Train Accuracy:", accuracy.eval({X: train.images.T, Y: train.labels.T}))
+            print("Test Accuracy:", accuracy.eval({X: test.images.T, Y: test.labels.T}))
+
+            return parameters
+
+
+def use_TfNN(fashion=True):
+    # Import Fashion MNIST
+    if fashion:
+        mnist = input_data.read_data_sets('../Datasets/FashionMNIST', one_hot=True)
+    else:
+        mnist = input_data.read_data_sets('../Datasets/MNIST', one_hot=True)
+
+    # Shapes of training set
+    print("Training set (images) shape: {shape}".format(shape=mnist.train.images.shape))
+    print("Training set (labels) shape: {shape}".format(shape=mnist.train.labels.shape))
+
+    # Shapes of test set
+    print("Test set (images) shape: {shape}".format(shape=mnist.test.images.shape))
+    print("Test set (labels) shape: {shape}".format(shape=mnist.test.labels.shape))
+    train = mnist.train
+    test = mnist.test
+    NNclassifieur = TfNN(mnist)
+    parameters = NNclassifieur.model(train, test, learning_rate=5e-4)
 
 
 # TODO tensorflow/keras convolution NN
-# TODO keras resnet
+
+
+class KerasResnet50:
+    """
+    Inspired from https://github.com/tensorflow/models/tree/master/official/resnet.
+    """
+    def __init__(self):
+        self.L2_WEIGHT_DECAY = 1e-4
+        self.BATCH_NORM_DECAY = 0.9
+        self.BATCH_NORM_EPSILON = 1e-5
+        self.model = self.resnet50(10)
+
+    def identity_block(self, input_tensor, kernel_size, filters, stage, block):
+        """The identity block is the block that has no conv layer at shortcut.
+
+        # Arguments
+            input_tensor: input tensor
+            kernel_size: default 3, the kernel size of
+                middle conv layer at main path
+            filters: list of integers, the filters of 3 conv layer at main path
+            stage: integer, current stage label, used for generating layer names
+            block: 'a','b'..., current block label, used for generating layer names
+
+        # Returns
+            Output tensor for the block.
+        """
+        filters1, filters2, filters3 = filters
+        if backend.image_data_format() == 'channels_last':
+            bn_axis = 3
+        else:
+            bn_axis = 1
+        conv_name_base = 'res' + str(stage) + block + '_branch'
+        bn_name_base = 'bn' + str(stage) + block + '_branch'
+
+        x = layers.Conv2D(filters1, (1, 1), use_bias=False,
+                          kernel_initializer='he_normal',
+                          kernel_regularizer=regularizers.l2(self.L2_WEIGHT_DECAY),
+                          name=conv_name_base + '2a')(input_tensor)
+        x = layers.BatchNormalization(axis=bn_axis,
+                                      momentum=self.BATCH_NORM_DECAY,
+                                      epsilon=self.BATCH_NORM_EPSILON,
+                                      name=bn_name_base + '2a')(x)
+        x = layers.Activation('relu')(x)
+
+        x = layers.Conv2D(filters2, kernel_size,
+                          padding='same', use_bias=False,
+                          kernel_initializer='he_normal',
+                          kernel_regularizer=regularizers.l2(self.L2_WEIGHT_DECAY),
+                          name=conv_name_base + '2b')(x)
+        x = layers.BatchNormalization(axis=bn_axis,
+                                      momentum=self.BATCH_NORM_DECAY,
+                                      epsilon=self.BATCH_NORM_EPSILON,
+                                      name=bn_name_base + '2b')(x)
+        x = layers.Activation('relu')(x)
+
+        x = layers.Conv2D(filters3, (1, 1), use_bias=False,
+                          kernel_initializer='he_normal',
+                          kernel_regularizer=regularizers.l2(self.L2_WEIGHT_DECAY),
+                          name=conv_name_base + '2c')(x)
+        x = layers.BatchNormalization(axis=bn_axis,
+                                      momentum=self.BATCH_NORM_DECAY,
+                                      epsilon=self.BATCH_NORM_EPSILON,
+                                      name=bn_name_base + '2c')(x)
+
+        x = layers.add([x, input_tensor])
+        x = layers.Activation('relu')(x)
+        return x
+
+    def conv_block(self, input_tensor, kernel_size, filters, stage, block, strides=(2, 2)):
+        """A block that has a conv layer at shortcut.
+
+        # Arguments
+            input_tensor: input tensor
+            kernel_size: default 3, the kernel size of
+                middle conv layer at main path
+            filters: list of integers, the filters of 3 conv layer at main path
+            stage: integer, current stage label, used for generating layer names
+            block: 'a','b'..., current block label, used for generating layer names
+            strides: Strides for the second conv layer in the block.
+
+        # Returns
+            Output tensor for the block.
+
+        Note that from stage 3,
+        the second conv layer at main path is with strides=(2, 2)
+        And the shortcut should have strides=(2, 2) as well
+        """
+        filters1, filters2, filters3 = filters
+        if backend.image_data_format() == 'channels_last':
+            bn_axis = 3
+        else:
+            bn_axis = 1
+        conv_name_base = 'res' + str(stage) + block + '_branch'
+        bn_name_base = 'bn' + str(stage) + block + '_branch'
+
+        x = layers.Conv2D(filters1, (1, 1), use_bias=False,
+                          kernel_initializer='he_normal',
+                          kernel_regularizer=regularizers.l2(self.L2_WEIGHT_DECAY),
+                          name=conv_name_base + '2a')(input_tensor)
+        x = layers.BatchNormalization(axis=bn_axis,
+                                      momentum=self.BATCH_NORM_DECAY,
+                                      epsilon=self.BATCH_NORM_EPSILON,
+                                      name=bn_name_base + '2a')(x)
+        x = layers.Activation('relu')(x)
+
+        x = layers.Conv2D(filters2, kernel_size, strides=strides, padding='same',
+                          use_bias=False, kernel_initializer='he_normal',
+                          kernel_regularizer=regularizers.l2(self.L2_WEIGHT_DECAY),
+                          name=conv_name_base + '2b')(x)
+        x = layers.BatchNormalization(axis=bn_axis,
+                                      momentum=self.BATCH_NORM_DECAY,
+                                      epsilon=self.BATCH_NORM_EPSILON,
+                                      name=bn_name_base + '2b')(x)
+        x = layers.Activation('relu')(x)
+
+        x = layers.Conv2D(filters3, (1, 1), use_bias=False,
+                          kernel_initializer='he_normal',
+                          kernel_regularizer=regularizers.l2(self.L2_WEIGHT_DECAY),
+                          name=conv_name_base + '2c')(x)
+        x = layers.BatchNormalization(axis=bn_axis,
+                                      momentum=self.BATCH_NORM_DECAY,
+                                      epsilon=self.BATCH_NORM_EPSILON,
+                                      name=bn_name_base + '2c')(x)
+
+        shortcut = layers.Conv2D(filters3, (1, 1), strides=strides, use_bias=False,
+                                 kernel_initializer='he_normal',
+                                 kernel_regularizer=regularizers.l2(self.L2_WEIGHT_DECAY),
+                                 name=conv_name_base + '1')(input_tensor)
+        shortcut = layers.BatchNormalization(axis=bn_axis,
+                                             momentum=self.BATCH_NORM_DECAY,
+                                             epsilon=self.BATCH_NORM_EPSILON,
+                                             name=bn_name_base + '1')(shortcut)
+
+        x = layers.add([x, shortcut])
+        x = layers.Activation('relu')(x)
+        return x
+
+    def resnet50(self, num_classes):
+        """Instantiates the ResNet50 architecture.
+
+        Args:
+          num_classes: `int` number of classes for image classification.
+
+        Returns:
+            A Keras model instance.
+        """
+        input_shape = (28, 28, 1)
+        img_input = layers.Input(shape=input_shape)
+
+        if backend.image_data_format() == 'channels_first':
+            x = layers.Lambda(lambda x: backend.permute_dimensions(x, (0, 3, 1, 2)),
+                              name='transpose')(img_input)
+            bn_axis = 1
+        else:  # channels_last
+            x = img_input
+            bn_axis = 3
+
+        x = layers.ZeroPadding2D(padding=(3, 3), name='conv1_pad')(x)
+        x = layers.Conv2D(64, (7, 7),
+                          strides=(2, 2),
+                          padding='valid', use_bias=False,
+                          kernel_initializer='he_normal',
+                          kernel_regularizer=regularizers.l2(self.L2_WEIGHT_DECAY),
+                          name='conv1')(x)
+        x = layers.BatchNormalization(axis=bn_axis,
+                                      momentum=self.BATCH_NORM_DECAY,
+                                      epsilon=self.BATCH_NORM_EPSILON,
+                                      name='bn_conv1')(x)
+        x = layers.Activation('relu')(x)
+        x = layers.ZeroPadding2D(padding=(1, 1), name='pool1_pad')(x)
+        x = layers.MaxPooling2D((3, 3), strides=(2, 2))(x)
+
+        x = self.conv_block(x, 3, [64, 64, 256], stage=2, block='a', strides=(1, 1))
+        x = self.identity_block(x, 3, [64, 64, 256], stage=2, block='b')
+        x = self.identity_block(x, 3, [64, 64, 256], stage=2, block='c')
+
+        x = self.conv_block(x, 3, [128, 128, 512], stage=3, block='a')
+        x = self.identity_block(x, 3, [128, 128, 512], stage=3, block='b')
+        x = self.identity_block(x, 3, [128, 128, 512], stage=3, block='c')
+        x = self.identity_block(x, 3, [128, 128, 512], stage=3, block='d')
+
+        x = self.conv_block(x, 3, [256, 256, 1024], stage=4, block='a')
+        x = self.identity_block(x, 3, [256, 256, 1024], stage=4, block='b')
+        x = self.identity_block(x, 3, [256, 256, 1024], stage=4, block='c')
+        x = self.identity_block(x, 3, [256, 256, 1024], stage=4, block='d')
+        x = self.identity_block(x, 3, [256, 256, 1024], stage=4, block='e')
+        x = self.identity_block(x, 3, [256, 256, 1024], stage=4, block='f')
+
+        x = self.conv_block(x, 3, [512, 512, 2048], stage=5, block='a')
+        x = self.identity_block(x, 3, [512, 512, 2048], stage=5, block='b')
+        x = self.identity_block(x, 3, [512, 512, 2048], stage=5, block='c')
+
+        x = layers.GlobalAveragePooling2D(name='avg_pool')(x)
+        x = layers.Dense(
+            num_classes, activation='softmax',
+            kernel_regularizer=regularizers.l2(self.L2_WEIGHT_DECAY),
+            bias_regularizer=regularizers.l2(self.L2_WEIGHT_DECAY),
+            name='fc{0}'.format(num_classes))(x)
+
+        # Create model.
+        return models.Model(img_input, x, name='resnet50')
+
+    def train(self, num_epochs, mnist):
+        train_X, val_X, train_Y, val_Y = mnist
+
+        self.model.compile(loss='categorical_crossentropy',
+                      optimizer='Adam',
+                      metrics=['categorical_accuracy'])
+        history = self.model.fit(train_X, train_Y, epochs=num_epochs, batch_size=128, verbose=1, validation_data=(val_X, val_Y))
+        return history
+
+
+def use_KerasResnet(fashion=True, num_epochs=5):
+    if fashion:
+        X, X_test, Y, Y_test = mnistProcessing.load_FashionMNIST(one_hot=True)
+    else:
+        X, X_test, Y, Y_test = mnistProcessing.load_MNIST(one_hot=True)
+
+    model = KerasResnet50()
+    history = model.train(num_epochs, (X, X_test, Y, Y_test))
 
 
 if __name__ == "__main__":
     from DataProcessing import IrisProcessing, mnistProcessing
-    use_NumpyNN(IrisProcessing.load_iris(0.1), epsilon=1e-5, nn_hdim=1024, num_passes=5000)
-    use_NumpyNN(mnistProcessing.load_MNIST(flatten=True, one_hot=True), epsilon=1e-5, nn_hdim=256, num_passes=500)
+    # use_NumpyNN(IrisProcessing.load_iris(0.1), epsilon=1e-5, nn_hdim=1024, num_passes=5000)
+    # use_NumpyNN(mnistProcessing.load_MNIST(flatten=True, one_hot=True), nn_hdim=256, num_passes=500)
+    # use_TfNN()
+    use_KerasResnet()
