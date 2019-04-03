@@ -144,19 +144,20 @@ class NumpyNN:
                 self.stat.fill_confusion(index_labels, index_probs)
             h[j, np.nonzero(labels[j])[0][0]] -= 1
         self.stat.add_accuracy(current_epoch, accu / self.num_examples)
-        dW2 = a1.T.dot(h) * 1 / self.num_examples
-        db2 = np.sum(h, axis=0, keepdims=True)
-        delta2 = h.dot(self.W2.T) * (1 - np.power(a1, 2))
+        error = -h
+        dW2 = a1.T.dot(error) * 1 / self.num_examples
+        db2 = np.sum(error, axis=0)
+        delta2 = error.dot(self.W2.T) * (1 - np.power(a1, 2))
         dW1 = features.T.dot(delta2) * 1 / self.num_examples
         db1 = np.sum(delta2, axis=0)
         # Add regularization terms (b1 and b2 don't have regularization terms)
         dW2 += self.reg_lambda * self.W2
         dW1 += self.reg_lambda * self.W1
         # Gradient descent parameter update
-        self.W1 += -self.epsilon * dW1
-        self.b1 += -self.epsilon * db1
-        self.W2 += -self.epsilon * dW2
-        self.b2 += -self.epsilon * db2
+        self.W1 += self.epsilon * dW1
+        self.b1 += self.epsilon * db1
+        self.W2 += self.epsilon * dW2
+        self.b2 += self.epsilon * db2
 
     def train_model(self, features, labels, num_epochs=2000):
         """
@@ -711,7 +712,7 @@ def use_KerasResnet(fashion=True, num_epochs=5):
 
 if __name__ == "__main__":
     from DataProcessing import IrisProcessing, mnistProcessing
-    # use_NumpyNN(IrisProcessing.load_iris(0.1), epsilon=1e-5, nn_hdim=1024, num_passes=5000)
+    use_NumpyNN(IrisProcessing.load_iris(0.1), epsilon=1e-4, nn_hdim=512, num_passes=5000)
     # use_NumpyNN(mnistProcessing.load_MNIST(flatten=True, one_hot=True), nn_hdim=256, num_passes=500)
     # use_TfNN()
-    use_KerasResnet()
+    # use_KerasResnet()
